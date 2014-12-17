@@ -37,16 +37,43 @@ producer(Chan) ->
     producer(Chan).
 
 consumer(Chan) ->
-    Get = #'basic.get'{queue = <<"rmq_simple_queue">>},
-    case amqp_channel:call(Chan, Get) of
-        #'basic.get_empty'{} ->
-            timer:sleep(1000);
-        {#'basic.get_ok'{delivery_tag = Tag},
+    % Receive one message at a time. Ack'ing the message will release
+    % the next one. A large number of unack'ed messages applies back
+    % pressure on the producer.
+    #'basic.qos_ok'{} = amqp_channel:call(Chan,
+            #'basic.qos'{prefetch_count = 1}
+    ),
+    #'basic.consume_ok'{consumer_tag = CTag} = amqp_channel:call(Chan,
+            #'basic.consume'{
+                queue = <<"rmq_simple_queue">>
+            }
+    ),
+    consumer(Chan, CTag).
+
+consumer(Chan, CTag) ->
+    receive
+        #'basic.consume_ok'{} ->
+            ok;
+        {#'basic.deliver'{delivery_tag = DTag},
                 #amqp_msg{payload = Payload}} ->
             io:format("Received: ~p~n", [binary_to_term(Payload)]),
-            amqp_channel:cast(Chan, #'basic.ack'{delivery_tag = Tag})
+            amqp_channel:cast(Chan, #'basic.ack'{delivery_tag = DTag})
     end,
-    consumer(Chan).
+    timer:sleep(600),
+    consumer(Chan, CTag).
+
+% An alternative way to pull messages.
+% consumer(Chan) ->
+%    Get = #'basic.get'{queue = <<"rmq_simple_queue">>},
+%    case amqp_channel:call(Chan, Get) of
+%        #'basic.get_empty'{} ->
+%            timer:sleep(1000);
+%        {#'basic.get_ok'{delivery_tag = Tag},
+%                #amqp_msg{payload = Payload}} ->
+%            io:format("Received: ~p~n", [binary_to_term(Payload)]),
+%            amqp_channel:cast(Chan, #'basic.ack'{delivery_tag = Tag})
+%    end,
+%    consumer(Chan).
 
 teardown_rabbitmq(Conn, Producer_Chan, Consumer_Chan) ->
     ok = amqp_channel:close(Consumer_Chan),
