@@ -1,0 +1,6 @@
+
+make RABBITMQ_VERSION=<version> deps
+make compile
+make run
+
+Enjoy!
