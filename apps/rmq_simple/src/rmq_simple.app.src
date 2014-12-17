@@ -1,0 +1,8 @@
+{ application, rmq_simple, [
+    { description, "rmq_simple" },
+    { vsn, "0.1" },
+    { applications, [
+        kernel,
+        stdlib
+    ] }
+] }.
